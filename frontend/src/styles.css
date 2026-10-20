@@ -1,0 +1,51 @@
+:root {
+  --bg: #f4f6f8;
+  --card: #ffffff;
+  --text: #1c2733;
+  --muted: #6b7a89;
+  --line: #dde3e9;
+  --accent: #0b5cad;
+  --ok: #1a7f4b;
+  --bad: #b3261e;
+  --warn-bg: #fff4d6;
+  --dht: #e8f1fb;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12171c;
+    --card: #1b232b;
+    --text: #e6ebf0;
+    --muted: #93a1af;
+    --line: #2d3943;
+    --accent: #5aa7f0;
+    --ok: #4cc38a;
+    --bad: #ff8a80;
+    --warn-bg: #3b3216;
+    --dht: #1f3347;
+  }
+}
+
+body { margin: 0; background: var(--bg); color: var(--text); }
+.app { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { margin: 0; font-size: 1.6rem; }
+h2 { margin: 0 0 8px; font-size: 1.1rem; }
+header p { color: var(--muted); margin: 4px 0 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.notice { background: var(--warn-bg); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
+.muted { color: var(--muted); }
+.error { color: var(--bad); }
+.ok { color: var(--ok); font-weight: 600; }
+button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 8px 18px; font-size: 1rem; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: default; }
+.table-wrap { overflow: auto; max-height: 360px; border: 1px solid var(--line); border-radius: 6px; margin: 8px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { border-bottom: 1px solid var(--line); padding: 4px 8px; text-align: left; white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--card); }
+th.dht, td.dht { background: var(--dht); }
+td input { width: 100%; min-width: 70px; border: 0; background: transparent; color: inherit; font: inherit; }
+.s-updated td:nth-child(5) { color: var(--ok); }
+.s-failed td:nth-child(5), .s-invalid td:nth-child(5) { color: var(--bad); }
+.log { margin-top: 12px; max-height: 260px; overflow: auto; background: #0e1318; color: #cfd8e1; font: 12px/1.5 Consolas, monospace; padding: 10px; border-radius: 6px; }
+.log-error { color: #ff8a80; }
