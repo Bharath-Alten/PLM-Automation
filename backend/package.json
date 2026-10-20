@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tests/tsconfig.json",
     "test": "tsx --test tests/plmData.test.ts tests/operations.test.ts tests/specRunner.summary.test.ts",
-    "test:plm": "playwright test"
+    "test:plm": "playwright test",
+    "inspect": "playwright test -c playwright.inspect.config.ts"
   },
   "dependencies": {
     "@playwright/test": "^1.55.0",
