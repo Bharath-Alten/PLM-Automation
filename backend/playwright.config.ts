@@ -31,6 +31,9 @@ export default defineConfig({
     ignoreHTTPSErrors: true,
     // Applied to every page, which avoids net::ERR_INVALID_AUTH_CREDENTIALS when workers open pages together.
     httpCredentials,
+    // BROWSER_CHANNEL=chrome (or msedge) uses the installed browser: no download, which the
+    // company proxy can block. Empty = Playwright's own Chromium (npm run setup:browsers).
+    channel: process.env.BROWSER_CHANNEL || undefined,
     viewport: null,
     launchOptions: { args: ['--start-maximized'] },
     actionTimeout: 0,

@@ -29,6 +29,10 @@ npm start            # http://localhost:4000: import the .xlsx, check it, Run au
 Sign in to PLM in the window that opens. A report (`Row / Routing / OP / DHT / Status / Message`) is
 produced for each run and downloadable from the UI.
 
+Behind the company proxy `npm run setup:browsers` can fail with `unable to get local issuer certificate`.
+Skip it and set `BROWSER_CHANNEL=chrome` (or `msedge`) in `backend/.env`: the installed browser is used.
+Keep the project on a local drive (not a `\\server\...` share): npm workspaces need symlinks.
+
 Terminal alternative (like the previous project): put the file in `backend/inputs/inputData.xlsx`, then
 `cd backend && npx playwright test`.
 
