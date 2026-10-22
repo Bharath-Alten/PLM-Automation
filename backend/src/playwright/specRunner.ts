@@ -74,10 +74,23 @@ export function summarizeResults(results: RowResult[], expectedRows: number, spe
   };
 }
 
+/** Rows the spec decided to process (written by the spec before it starts), 0 until then. */
+export function readExpectedRows(artifactDir: string): number {
+  const expectedPath = path.join(artifactDir, 'expected-rows.txt');
+  return fs.existsSync(expectedPath) ? Number(fs.readFileSync(expectedPath, 'utf8')) || 0 : 0;
+}
+
+export type RunOptions = {
+  maxRows?: number;     // 0 = every row; overrides MAX_ROWS from backend/.env
+  workers?: number;     // routings processed side by side; overrides WORKERS from backend/.env
+  signal?: AbortSignal; // aborting stops the run
+};
+
 export async function runPlaywrightSpec(
   payload: ParsedWorkbook,
   artifactDir: string,
-  onProgress?: (event: AutomationProgressEvent) => void
+  onProgress?: (event: AutomationProgressEvent) => void,
+  options: RunOptions = {}
 ): Promise<{ success: boolean; message: string; summary: Record<string, unknown>; results: RowResult[] }> {
   const emit = (event: AutomationProgressEvent) => onProgress?.({ ...event, timestamp: new Date().toISOString() });
 
@@ -99,6 +112,8 @@ export async function runPlaywrightSpec(
     ARTIFACT_DIR: artifactDir,
     FORCE_COLOR: '0'
   };
+  if (options.maxRows !== undefined) specEnv.MAX_ROWS = String(options.maxRows);
+  if (options.workers !== undefined) specEnv.WORKERS = String(options.workers);
 
   emit({ type: 'status', step: 'Sign-in', message: 'Sign in to PLM in the browser window when it opens.' });
   emit({ type: 'status', step: 'Playwright test started', message: `Running ${SPEC_FILE}` });
@@ -120,11 +135,15 @@ export async function runPlaywrightSpec(
   child.stdout.on('data', onData);
   child.stderr.on('data', onData);
 
-  const timer = setTimeout(() => {
-    emit({ type: 'error', step: 'Timeout', message: `Stopped after ${config.automationTimeoutMs / 1000}s` });
+  const killRun = () => {
     if (process.platform === 'win32' && child.pid) spawn('taskkill', ['/pid', String(child.pid), '/T', '/F']);
     else child.kill('SIGTERM');
+  };
+  const timer = setTimeout(() => {
+    emit({ type: 'error', step: 'Timeout', message: `Stopped after ${config.automationTimeoutMs / 1000}s` });
+    killRun();
   }, config.automationTimeoutMs);
+  options.signal?.addEventListener('abort', killRun, { once: true });
 
   const exitCode = await new Promise<number>((resolve) => {
     child.on('error', (error) => {
@@ -135,9 +154,7 @@ export async function runPlaywrightSpec(
   });
   clearTimeout(timer);
 
-  // How many rows the spec was meant to process: written by the spec before it starts.
-  const expectedPath = path.join(artifactDir, 'expected-rows.txt');
-  const expectedRows = fs.existsSync(expectedPath) ? Number(fs.readFileSync(expectedPath, 'utf8')) || 0 : 0;
+  const expectedRows = readExpectedRows(artifactDir);
   const results = readResults(resultsPath);
   const business = summarizeResults(results, expectedRows, SPEC_FILE);
   const success = exitCode === 0 && business.success;

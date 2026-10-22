@@ -10,7 +10,7 @@ import * as XLSX from 'xlsx';
 
 import { config } from './config.js';
 import { parseWorkbook } from './excelParser.js';
-import { runPlaywrightSpec } from './playwright/specRunner.js';
+import { readExpectedRows, readResults, runPlaywrightSpec } from './playwright/specRunner.js';
 import type { AutomationProgressEvent, ParsedWorkbook, RowResult } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -47,6 +47,10 @@ type Job = {
   result?: { success: boolean; message: string; summary: Record<string, unknown> };
   rows?: RowResult[];
   artifacts?: Record<string, string>;
+  dir?: string;                 // artifact folder of the run: results are read from it while the run is going
+  abort?: AbortController;
+  stopped?: boolean;
+  options?: { maxRows: number; workers: number };
 };
 
 const jobs = new Map<string, Job>();
@@ -100,11 +104,14 @@ app.post('/api/upload', (req, res) => {
 });
 
 app.post('/api/automation/run', (req, res) => {
-  const payload = req.body as { fileName?: string; parsedData?: ParsedWorkbook };
+  const payload = req.body as { fileName?: string; parsedData?: ParsedWorkbook; maxRows?: unknown; workers?: unknown };
   if (!payload.parsedData?.sheetNames?.length) {
     return res.status(400).json({ error: 'No workbook data. Import a file first.' });
   }
   const data = payload.parsedData;
+  // 0 = every row. Whole numbers only, so nothing odd reaches the spec's environment.
+  const maxRows = Number.isInteger(payload.maxRows) && (payload.maxRows as number) >= 0 ? (payload.maxRows as number) : 0;
+  const workers = Number.isInteger(payload.workers) && (payload.workers as number) >= 1 && (payload.workers as number) <= 8 ? (payload.workers as number) : 1;
 
   if ([...jobs.values()].some((job) => job.status === 'queued' || job.status === 'running')) {
     return res.status(409).json({ error: 'A run is already in progress. PLM allows one run at a time.' });
@@ -112,14 +119,17 @@ app.post('/api/automation/run', (req, res) => {
 
   const jobId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   forgetOldJobs();
-  const job: Job = { status: 'queued', startTime: new Date().toISOString(), logs: [] };
+  const jobArtifactDir = path.join(uploadDir, 'artifacts', jobId);
+  const job: Job = {
+    status: 'queued', startTime: new Date().toISOString(), logs: [],
+    dir: jobArtifactDir, abort: new AbortController(), options: { maxRows, workers }
+  };
   jobs.set(jobId, job);
 
   void (async () => {
     job.status = 'running';
     job.logs.push({ type: 'status', step: 'Playwright started', message: 'Automation queued and waiting to start.', timestamp: new Date().toISOString() });
 
-    const jobArtifactDir = path.join(uploadDir, 'artifacts', jobId);
     fs.mkdirSync(jobArtifactDir, { recursive: true });
     job.artifacts = {};
 
@@ -132,7 +142,14 @@ app.post('/api/automation/run', (req, res) => {
     }
 
     try {
-      const result = await runPlaywrightSpec(data, jobArtifactDir, (event) => job.logs.push(event));
+      const result = await runPlaywrightSpec(data, jobArtifactDir, (event) => job.logs.push(event), {
+        maxRows, workers, signal: job.abort?.signal
+      });
+      if (job.stopped) {
+        result.success = false;
+        result.message = `Run stopped. ${result.results.length} row(s) had been processed.`;
+        result.summary = { ...result.summary, businessStatus: 'stopped' };
+      }
       job.result = { success: result.success, message: result.message, summary: result.summary };
       job.rows = result.results;
       if (result.results.length) {
@@ -156,16 +173,30 @@ app.post('/api/automation/run', (req, res) => {
 app.get('/api/automation/status/:jobId', (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job) return res.status(404).json({ error: 'Job not found.' });
+  // While the run is going, the rows done so far are read from its results file.
+  const rows = job.rows ?? (job.dir ? readResults(path.join(job.dir, 'results.jsonl')) : []);
   return res.json({
     jobId: req.params.jobId,
     status: job.status,
     logs: job.logs,
     result: job.result,
-    rows: job.rows,
+    rows,
+    progress: { done: rows.length, total: job.dir ? readExpectedRows(job.dir) : 0 },
+    options: job.options,
     artifacts: job.artifacts,
     startedAt: job.startTime,
     completedAt: job.endTime
   });
+});
+
+app.post('/api/automation/stop/:jobId', (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'Job not found.' });
+  if (job.status !== 'queued' && job.status !== 'running') return res.status(409).json({ error: 'The run is not in progress.' });
+  job.stopped = true;
+  job.logs.push({ type: 'error', step: 'Stop requested', message: 'Stopping the run...', timestamp: new Date().toISOString() });
+  job.abort?.abort();
+  return res.json({ status: 'stopping' });
 });
 
 app.get('/api/automation/artifact/:jobId/:fileName', (req, res) => {
