@@ -39,8 +39,10 @@ const EDITOR_TAG = 'data-plm-dht-editor';
  * use it. Returns false when the row or the column cannot be found.
  */
 export async function tagDhtCell(label: Locator, header: string = DHT_COLUMN_HEADER): Promise<boolean> {
-  return label.evaluate((el, args) => {
-    const { header: wanted, tag } = args;
+  // Only a plain string goes into evaluate: Windchill's scripts break Playwright's unpacking of object
+  // arguments ("refs.set is not a function"), while strings work. Header and tag travel as "header|tag".
+  return label.evaluate((el, packed) => {
+    const [wanted, tag] = packed.split('|');
     const doc = el.ownerDocument;
     doc.querySelectorAll(`[${tag}]`).forEach((n) => n.removeAttribute(tag));
     const plain = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -66,7 +68,13 @@ export async function tagDhtCell(label: Locator, header: string = DHT_COLUMN_HEA
     if (!cell) return false;
     cell.setAttribute(tag, '1');
     return true;
-  }, { header, tag: CELL_TAG });
+  }, `${header}|${CELL_TAG}`);
+}
+
+/** The label numbers currently in the Uses table, to show in the log when an operation is not found. */
+export async function visibleLabels(frame: FrameLocator): Promise<string[]> {
+  const texts = await frame.locator('//span[@qtip]').allTextContents().catch(() => [] as string[]);
+  return texts.map((t) => t.trim()).filter((t) => /^\d{4}$/.test(t));
 }
 
 /** The cell tagged by tagDhtCell. */

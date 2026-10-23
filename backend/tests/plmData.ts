@@ -23,7 +23,9 @@ export type PlmRow = {
 const norm = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const ROUTING_ALIASES = ['routing', 'routingnumber', 'routine', 'routinenumber', 'gamma', 'gamme', 'gammes', 'gammenumber', 'processplan'];
-const OPERATION_ALIASES = ['op', 'opnumber', 'operation', 'operationnumber', 'opno', 'opnum', 'operationno'];
+// An operation number is digits (10, 0010, "10.0"); anything else in that column ("Total :") is not an operation.
+const OPERATION_NUMBER = /^\d{1,4}(\.0+)?$/;
+const OPERATION_ALIASES =['op', 'opnumber', 'operation', 'operationnumber', 'opno', 'opnum', 'operationno'];
 
 function dataKeys(rows: SheetRow[]) {
   return Object.keys(rows[0] ?? {}).filter((key) => key !== '__row');
@@ -75,6 +77,7 @@ export function toPlmRows(rows: SheetRow[], env: Record<string, string | undefin
     const operation = text(sheetRow[operationKey]);
     const dht = text(sheetRow[dhtKey]);
     if (!operation && !dht) return []; // blank line, or a routing title line with no operation
+    if (operation && !OPERATION_NUMBER.test(operation)) return []; // "Total :" and other lines that are not operations
     const row = typeof sheetRow.__row === 'number' ? sheetRow.__row : index + 2;
     const problem = !routing ? 'Routing is empty'
       : !operation ? 'Operation Number Empty'

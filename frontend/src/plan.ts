@@ -67,6 +67,7 @@ export function buildPlan(rows: SheetRow[]): Plan {
     const operation = text(row[operationKey]);
     const dht = text(row[dhtKey]);
     if (!operation && !dht) return; // blank line or routing title line
+    if (operation && !/^\d{1,4}(\.0+)?$/.test(operation)) return; // "Total :" and other lines that are not operations
     const problem = !current ? 'Routing is empty' : !operation ? 'Operation number is empty' : !dht ? 'DHT value is empty' : undefined;
     planRows.push({
       index,

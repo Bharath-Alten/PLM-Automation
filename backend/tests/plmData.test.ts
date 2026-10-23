@@ -49,6 +49,16 @@ test('real layout: accented headers, routing only on the first line of a group, 
   ]);
 });
 
+test('"Total :" lines are not operations and do not break the routing carried down', () => {
+  const sheet: SheetRow[] = [
+    { Gamme: 'C0S100-101-0601-02', 'Opération': '0010', D: 'a', E: 'b', 'DHT Corrigé': '0.00' },
+    { Gamme: null, 'Opération': 'Total :', D: '-', E: '24.1', 'DHT Corrigé': '65.00' },
+    { Gamme: 'C0S100-101-0602-02', 'Opération': '0010', D: 'a', E: 'b', 'DHT Corrigé': '1.00' }
+  ];
+  const rows = toPlmRows(sheet, {});
+  assert.deepEqual(rows.map((r) => [r.routing, r.paddedOperation]), [['C0S100-101-0601-02', '0010'], ['C0S100-101-0602-02', '0010']]);
+});
+
 test('pickSheet takes the sheet that has routing and operation columns', () => {
   const sheets: Record<string, SheetRow[]> = {
     'Analyse Rapide': [{ Release: 'Oui', Gammes: 'X', 'DHT Actuel': '1' }],

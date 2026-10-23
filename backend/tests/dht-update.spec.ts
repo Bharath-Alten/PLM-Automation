@@ -7,7 +7,7 @@ import { groupByRouting, loadPlmRows, type PlmRow } from './plmData';
 import { dhtMatches, pickLatestVersion } from './operations';
 import {
   DHT_COLUMN_HEADER, PLM_URL, dhtCell, dhtEditor, operationLabel, planFrame, planGrid, resultLinks,
-  searchBox, searchButton, structureTab, tagDhtCell, tagEditor, usesTab
+  searchBox, searchButton, structureTab, tagDhtCell, tagEditor, usesTab, visibleLabels
 } from './selectors';
 
 // For each routing in the file: open its latest version in PLM, go to Structure > Uses, and for each
@@ -119,6 +119,7 @@ for (const [routing, items] of groups) {
           const label = operationLabel(frame, item.paddedOperation);
           if (!(await label.count())) {
             pending.delete(item);
+            await actions.log(`Operation ${item.paddedOperation} not found. Label numbers in the table: ${(await visibleLabels(frame)).join(', ') || '(none)'}`);
             record(item, 'not-in-plm', `Operation ${item.paddedOperation} is not in the Uses table; skipped`);
             continue;
           }
