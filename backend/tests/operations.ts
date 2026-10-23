@@ -15,6 +15,19 @@ export function sameValue(expected: string, actual: string): boolean {
   return !Number.isNaN(num(a)) && num(a) === num(b);
 }
 
+/** The number in a DHT cell: "1.35 DHT" -> 1.35, "0 DHT" -> 0, "2,7 DHT" -> 2.7. NaN when there is none. */
+export function parseDhtText(text: string): number {
+  const match = text.replace(/ /g, ' ').match(/-?\d+(?:[.,]\d+)?/);
+  return match ? Number(match[0].replace(',', '.')) : NaN;
+}
+
+/** Does the cell text ("1.35 DHT") hold the expected value from the file ("1.35", "0.00", "2,7")? */
+export function dhtMatches(cellText: string, expected: string): boolean {
+  const shown = parseDhtText(cellText);
+  const wanted = parseDhtText(expected);
+  return !Number.isNaN(shown) && !Number.isNaN(wanted) && Math.abs(shown - wanted) < 1e-9;
+}
+
 // "A.3", "B.12" ... : revision letter(s), then iteration.
 const VERSION = /\b([A-Z]{1,2})\.(\d+)\b/;
 

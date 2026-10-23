@@ -4,15 +4,19 @@ import * as path from 'path';
 
 import { Actions } from './webactions';
 import { groupByRouting, loadPlmRows, type PlmRow } from './plmData';
-import { pickLatestVersion, sameValue } from './operations';
-import { PLM_URL, dhtItem, operationCell, planFrame, planGrid, resolveDhtInput, resultLinks, searchBox, searchButton, structureTab, tagDhtItem } from './selectors';
+import { dhtMatches, pickLatestVersion } from './operations';
+import {
+  DHT_COLUMN_HEADER, PLM_URL, dhtCell, dhtEditor, operationLabel, planFrame, planGrid, resultLinks,
+  searchBox, searchButton, structureTab, tagDhtCell, tagEditor, usesTab
+} from './selectors';
 
-// For each routing in the file: open its latest version in PLM, and for each operation of the file
-// that exists in the structure (//span[@qtip="0020"]), find its DHT item (//span[@qtip="1.35 DHT"])
-// and put the value of column E into it. No operation, or no DHT item: skip and carry on.
+// For each routing in the file: open its latest version in PLM, go to Structure > Uses, and for each
+// operation of the file find its row by label number (//span[@qtip="0020"]); in that row, put the
+// value of column E into the "Temps Traite..." cell (it reads like "1.35 DHT").
+// Operation not in the table, or no such cell: skip and carry on.
 //
 // THE RUN STOPS BEFORE "INTEGRATE". Nothing is checked in or integrated until the clarification
-// meeting with Airbus Atlantic has cleared it; the field is filled and verified, then the next
+// meeting with Airbus Atlantic has cleared it; the cell is filled and verified, then the next
 // operation is handled. (Final step, once cleared: click Integrate and write the note "projet clocking".)
 
 const LOGIN_WAIT_MS = Number(process.env.LOGIN_WAIT_MS || 300_000);
@@ -82,60 +86,70 @@ for (const [routing, items] of groups) {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(5000);
 
-      // 4. Structure tab.
+      // 4. Structure tab, then its Uses table (one row per operation).
       await expect(structureTab(page)).toBeVisible({ timeout: 15_000 });
       await structureTab(page).click();
       await page.waitForTimeout(10_000);
       const frame = planFrame(page);
       await planGrid(frame).waitFor({ state: 'visible', timeout: 30_000 });
+      await usesTab(frame).click({ timeout: 5000 }).catch(() => undefined); // already open by default
       await page.waitForTimeout(2000);
 
-      // 5. Operation by operation: missing in PLM -> skip; extra in PLM -> ignored (never looked at).
+      // 5. Operation by operation. In PLM but not in the file: never looked at. In the file but not in PLM: skipped.
       for (const item of todo) {
         try {
-          const cell = operationCell(frame, item.paddedOperation);
-          if (!(await cell.isVisible().catch(() => false))) {
+          // The row: its label number cell, //span[@qtip="0020"].
+          const label = operationLabel(frame, item.paddedOperation);
+          if (!(await label.count())) {
             pending.delete(item);
-            record(item, 'not-in-plm', `Operation ${item.paddedOperation} does not exist in the process plan; skipped`);
+            record(item, 'not-in-plm', `Operation ${item.paddedOperation} is not in the Uses table; skipped`);
             continue;
           }
+          await label.scrollIntoViewIfNeeded();
+
+          // The cell to fill: same row, under the "Temps Traite..." column.
+          if (!(await tagDhtCell(label))) {
+            pending.delete(item);
+            record(item, 'no-dht', `No "${DHT_COLUMN_HEADER}..." cell found on the row of operation ${item.paddedOperation}; skipped`);
+            continue;
+          }
+          const cell = dhtCell(frame);
+          const before = (await cell.innerText()).trim();
+
+          // Already the right value (the cell reads e.g. "1.35 DHT"): nothing to type.
+          if (dhtMatches(before, item.dht)) {
+            await actions.screenshot(`Routing_${routing}_Op_${item.paddedOperation}_DHT`);
+            pending.delete(item);
+            record(item, 'updated', `Already ${before} (not integrated)`);
+            continue;
+          }
+
+          // Open the editor: one click, else a double click (depends on how the grid is set up).
           await cell.click();
-          await page.waitForTimeout(3000);
-
-          // The operation's DHT item (//span[@qtip="<value> DHT"]); no such item: skip the operation.
-          if (!(await tagDhtItem(cell))) {
-            pending.delete(item);
-            record(item, 'no-dht', `Operation ${item.paddedOperation} has no DHT item; skipped`);
-            continue;
+          await page.waitForTimeout(800);
+          if (!(await tagEditor(cell))) {
+            await cell.dblclick();
+            await page.waitForTimeout(800);
+            if (!(await tagEditor(cell))) {
+              throw new Error('The cell did not become editable (the plan may need to be checked out)');
+            }
           }
-          await dhtItem(frame).click();
-          await page.waitForTimeout(3000);
-
-          const input = await resolveDhtInput(frame);
-          await expect(input, `DHT field for operation ${item.paddedOperation}`).toBeVisible({ timeout: 15_000 });
-          if (!(await input.isEditable())) {
-            throw new Error('DHT field is read-only (the plan may need to be checked out)');
-          }
-          await input.scrollIntoViewIfNeeded();
-          await input.click({ force: true });
-          await input.evaluate((el: HTMLInputElement, value: string) => {
+          const editor = dhtEditor(frame);
+          await editor.evaluate((el: HTMLInputElement, value: string) => {
             el.value = value;
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
-            el.dispatchEvent(new Event('blur', { bubbles: true }));
           }, item.dht);
-          await input.press('Enter');
-          await page.waitForTimeout(1000);
-          await input.press('Tab');
-          await page.waitForTimeout(2000);
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(1500);
 
-          const actual = await input.inputValue();
-          if (!sameValue(item.dht, actual)) {
-            throw new Error(`DHT shows "${actual}" after typing "${item.dht}"`);
+          const after = (await cell.innerText()).trim();
+          if (!dhtMatches(after, item.dht)) {
+            throw new Error(`The cell shows "${after}" after typing "${item.dht}" (was "${before}")`);
           }
           await actions.screenshot(`Routing_${routing}_Op_${item.paddedOperation}_DHT`);
           pending.delete(item);
-          record(item, 'updated', `DHT set to ${item.dht} (not integrated)`);
+          record(item, 'updated', `${before} -> ${after} (not integrated)`);
         } catch (error) {
           pending.delete(item);
           await actions.screenshot(`Routing_${routing}_Op_${item.paddedOperation}_Failed`);

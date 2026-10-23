@@ -8,10 +8,13 @@ streams its output back.
 
 1. Open PLM, search the routing (Gamma) number.
 2. Open the matching result at its latest version.
-3. Structure tab: look for each operation number of the file.
-   - operation missing in PLM: skipped, reported as "Not in PLM";
+3. Structure tab, **Uses** table (one row per operation): find each operation number of the file by its
+   label number (`//span[@qtip="0020"]`).
+   - operation missing in the table: skipped, reported as "Not in PLM";
    - extra operation in PLM that is not in the file: ignored.
-4. Put the value of **column E** of the file into the DHT field of that operation, and check it took.
+4. In that row, put the value of **column E** of the file into the **"Temps Traite..."** cell (it reads like
+   `1.35 DHT`), and check it took. The other DHT columns (Temps Prépa, TRS) are never touched. A cell that
+   already shows the right value is left alone. No such cell on the row: skipped, reported as "No DHT item".
 5. **Stop. Integrate is never clicked.** Wait for the Airbus Atlantic clarification.
    (Final step, once cleared: click Integrate and write the note "projet clocking".)
 
@@ -70,7 +73,10 @@ frontend/src/App.tsx    the UI
 
 These could not be tested without PLM access:
 
-- `dhtInput` in `selectors.ts` (the DHT field, found by its label). Override with `DHT_INPUT_XPATH`.
-- Whether the plan must be **checked out** to edit DHT (the run reports "DHT field is read-only" if so).
+- The **Temps Traite** column: it is found by its header title starting with "Temps Traite" (change it with
+  `DHT_COLUMN_HEADER` in `backend/.env`) and the cell by its position under that header.
+- How the cell is edited: the run clicks it, then double-clicks if no input opened, and types in the numeric
+  input that appears over it. If that is not how the grid works, `npm run inspect` shows what happens.
+- Whether the plan must be **checked out** to edit (the run reports "The cell did not become editable" if so).
 - Whether edits made on several operations survive until Integrate, since nothing is saved on purpose.
 - The latest-version choice reads versions like `A.3` from the result row text.

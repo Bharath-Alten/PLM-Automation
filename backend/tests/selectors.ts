@@ -1,7 +1,7 @@
 import type { FrameLocator, Locator, Page } from '@playwright/test';
 
 // Every Windchill locator in one place. The ones marked "from the previous project" worked on
-// plm-mc-12 six months ago. The DHT item and field are new: check them against the real screen first.
+// plm-mc-12 six months ago. The Uses-table ones are new: check them against the real screen first.
 
 export const PLM_URL = process.env.PLM_URL || 'https://plm-mc-12.myatlantic.aero/Windchill/app/';
 
@@ -17,59 +17,78 @@ export const planFrame = (page: Page) => page.frameLocator("//iframe[@id='ppbIFr
 // The UI sometimes renders two matching grid bodies: take the first to avoid a strict-mode violation.
 export const planGrid = (frame: FrameLocator) => frame.locator("//div[contains(@class,'x-grid3-body')]").first();
 
-/**
- * The operation in the structure tree: //span[@qtip="0020"], or (previous project) a cell whose text
- * is "0020, ..." or just "0020".
- */
-export const operationCell = (frame: FrameLocator, paddedOperation: string) =>
-  frame.locator(
-    `//span[@qtip='${paddedOperation}'] | //td[contains(@class,'x-grid3-cell')]//span[starts-with(normalize-space(text()),'${paddedOperation},') or normalize-space(text())='${paddedOperation}']`
-  ).first();
+// ---- the "Uses" table of the Structure tab: one row per operation ---------------------------
 
-const DHT_ITEM_ATTRIBUTE = 'data-plm-dht';
+/** The "Uses" tab of the right-hand panel (it is the one open by default; clicking it again is harmless). */
+export const usesTab = (frame: FrameLocator) => frame.locator("//span[normalize-space(text())='Uses']").first();
+
+/** The operation's label number cell in the Uses table: //span[@qtip="0020"]. */
+export const operationLabel = (frame: FrameLocator, paddedOperation: string) =>
+  frame.locator(`//span[@qtip='${paddedOperation}']`).first();
+
+/** Header of the column that receives the value ("Temps Traite..." is the start of its title). */
+export const DHT_COLUMN_HEADER = process.env.DHT_COLUMN_HEADER || 'Temps Traite';
+
+const CELL_TAG = 'data-plm-dht-cell';
+const EDITOR_TAG = 'data-plm-dht-editor';
 
 /**
- * Finds the DHT item of an operation: the first span after the operation whose qtip reads like
- * "1.35 DHT" (//span[@qtip="1.35 DHT"]), looking no further than the next operation's own span, so
- * another operation's DHT is never taken. The span found is tagged, so dhtItem() can click it.
- * Returns false when the operation has no DHT item.
+ * The DHT cell of an operation: in the same row as its label, the cell lying under the column whose
+ * header starts with `header`. The column is matched by position on screen, so it does not matter how
+ * many columns sit before it or how the grid builds its markup. The cell is tagged, so dhtCell() can
+ * use it. Returns false when the row or the column cannot be found.
  */
-export async function tagDhtItem(operation: Locator): Promise<boolean> {
-  return operation.evaluate((op, attribute) => {
-    const doc = op.ownerDocument;
-    doc.querySelectorAll(`[${attribute}]`).forEach((el) => el.removeAttribute(attribute));
-    const FOLLOWING = 4; // Node.DOCUMENT_POSITION_FOLLOWING
-    for (const span of Array.from(doc.querySelectorAll('span[qtip]'))) {
-      if (span === op || op.contains(span) || !(op.compareDocumentPosition(span) & FOLLOWING)) continue;
-      const qtip = (span.getAttribute('qtip') ?? '').trim();
-      if (/^\d{4}$/.test(qtip)) return false; // the next operation: this one has no DHT item
-      if (/\sDHT$/i.test(qtip)) {
-        span.setAttribute(attribute, '1');
-        return true;
-      }
-    }
-    return false;
-  }, DHT_ITEM_ATTRIBUTE);
+export async function tagDhtCell(label: Locator, header: string = DHT_COLUMN_HEADER): Promise<boolean> {
+  return label.evaluate((el, args) => {
+    const { header: wanted, tag } = args;
+    const doc = el.ownerDocument;
+    doc.querySelectorAll(`[${tag}]`).forEach((n) => n.removeAttribute(tag));
+    const plain = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const prefix = plain(wanted);
+
+    // The header text element: the deepest visible element whose text starts with the wanted title.
+    const headers = Array.from(doc.querySelectorAll('div, span, td, th')).filter((n) => {
+      const text = plain(n.textContent ?? '');
+      const rect = n.getBoundingClientRect();
+      return text.startsWith(prefix) && text.length < 60 && rect.width > 0 && rect.height > 0;
+    });
+    const header = headers.find((n) => !headers.some((other) => other !== n && n.contains(other)));
+    if (!header) return false;
+    const headerRect = header.getBoundingClientRect();
+    const x = headerRect.left + headerRect.width / 2;
+
+    const row = el.closest('tr');
+    if (!row) return false;
+    const cell = Array.from(row.querySelectorAll('td')).find((td) => {
+      const rect = td.getBoundingClientRect();
+      return rect.width > 0 && x >= rect.left && x <= rect.right;
+    });
+    if (!cell) return false;
+    cell.setAttribute(tag, '1');
+    return true;
+  }, { header, tag: CELL_TAG });
 }
 
-/** The DHT item tagged by tagDhtItem. */
-export const dhtItem = (frame: FrameLocator) => frame.locator(`[${DHT_ITEM_ATTRIBUTE}='1']`).first();
-
-// The DHT input of the panel, found by its label. Set DHT_INPUT_XPATH to override it without touching the code.
-export const dhtInput = (frame: FrameLocator) =>
-  frame.locator(
-    process.env.DHT_INPUT_XPATH ||
-      "(//label[normalize-space(.)='DHT' or normalize-space(.)='DHT:']/following::input[not(@type='hidden')])[1]"
-  ).first();
+/** The cell tagged by tagDhtCell. */
+export const dhtCell = (frame: FrameLocator) => frame.locator(`[${CELL_TAG}='1']`).first();
 
 /**
- * The input to type the value in: the DHT-labelled one, else the numeric spinner of the previous
- * project's panel (index 2, then 1).
+ * After the cell has been clicked: the input that opened over it (the numeric editor, aria-valuemin,
+ * preferred). The input found is tagged. Returns false when no editor is showing.
  */
-export async function resolveDhtInput(frame: FrameLocator): Promise<Locator> {
-  const labelled = dhtInput(frame);
-  if (await labelled.isVisible().catch(() => false)) return labelled;
-  const second = frame.locator("(//input[@aria-valuemin='-Infinity'])[2]");
-  if (await second.isVisible().catch(() => false)) return second;
-  return frame.locator("(//input[@aria-valuemin='-Infinity'])[1]");
+export async function tagEditor(cell: Locator): Promise<boolean> {
+  return cell.evaluate((td, tag) => {
+    const doc = td.ownerDocument;
+    doc.querySelectorAll(`[${tag}]`).forEach((n) => n.removeAttribute(tag));
+    const box = td.getBoundingClientRect();
+    const overlaps = (r: DOMRect) => r.width > 0 && r.height > 0 && r.left < box.right && r.right > box.left && r.top < box.bottom && r.bottom > box.top;
+    const inputs = Array.from(doc.querySelectorAll('input')).filter((i) => i.type !== 'hidden' && overlaps(i.getBoundingClientRect()));
+    const editor = inputs.find((i) => i.hasAttribute('aria-valuemin')) ?? inputs[0];
+    if (!editor) return false;
+    editor.setAttribute(tag, '1');
+    return true;
+  }, EDITOR_TAG);
 }
+
+/** The editor tagged by tagEditor. */
+export const dhtEditor = (frame: FrameLocator) => frame.locator(`input[${EDITOR_TAG}='1']`).first();
