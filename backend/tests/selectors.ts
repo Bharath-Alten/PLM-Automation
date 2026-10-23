@@ -68,7 +68,7 @@ export async function tagDhtCell(label: Locator, header: string = DHT_COLUMN_HEA
     if (!cell) return false;
     cell.setAttribute(tag, '1');
     return true;
-  }, `${header}|${CELL_TAG}`);
+  }, `${header}|${CELL_TAG}`, { timeout: 5000 }).catch(() => false); // the row is gone (table redrawn): not found, never a hang
 }
 
 /** The label numbers currently in the Uses table, to show in the log when an operation is not found. */
@@ -95,7 +95,7 @@ export async function tagEditor(cell: Locator): Promise<boolean> {
     if (!editor) return false;
     editor.setAttribute(tag, '1');
     return true;
-  }, EDITOR_TAG);
+  }, EDITOR_TAG, { timeout: 5000 }).catch(() => false);
 }
 
 /** The editor tagged by tagEditor. */

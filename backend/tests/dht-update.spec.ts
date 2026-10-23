@@ -123,7 +123,7 @@ for (const [routing, items] of groups) {
             record(item, 'not-in-plm', `Operation ${item.paddedOperation} is not in the Uses table; skipped`);
             continue;
           }
-          await label.scrollIntoViewIfNeeded();
+          await label.scrollIntoViewIfNeeded({ timeout: 5000 });
 
           // The cell to fill: same row, under the "Temps Traite..." column.
           if (!(await tagDhtCell(label))) {
@@ -132,14 +132,14 @@ for (const [routing, items] of groups) {
             continue;
           }
           const cell = dhtCell(frame);
-          const before = (await cell.innerText()).trim();
+          const before = (await cell.innerText({ timeout: 5000 })).trim();
 
           // The value is typed whatever the cell holds now (it is overwritten).
           // Open the editor: one click, else a double click (depends on how the grid is set up).
-          await cell.click();
+          await cell.click({ timeout: 10_000 });
           await page.waitForTimeout(800);
           if (!(await tagEditor(cell))) {
-            await cell.dblclick();
+            await cell.dblclick({ timeout: 10_000 });
             await page.waitForTimeout(800);
             if (!(await tagEditor(cell))) {
               throw new Error('The cell did not become editable (the plan may need to be checked out)');
@@ -150,16 +150,20 @@ for (const [routing, items] of groups) {
             el.value = value;
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
-          }, item.dht);
+          }, item.dht, { timeout: 5000 });
           await page.keyboard.press('Enter');
           await page.waitForTimeout(1500);
 
           // A confirmation may pop up after the value is entered: if an OK button shows, click it.
           const okClicked = await clickOkIfPresent(page, frame);
           if (okClicked) await actions.log(`Clicked OK for operation ${item.paddedOperation}`);
-          await page.waitForTimeout(1500);
+          await page.waitForTimeout(2000);
 
-          const after = (await cell.innerText()).trim();
+          // The table is redrawn after OK, so the cell found above may be gone: find the row and the cell again.
+          const rowAgain = operationLabel(frame, item.paddedOperation);
+          const found = (await rowAgain.count()) > 0 && (await tagDhtCell(rowAgain));
+          if (!found) throw new Error('After entering the value, the row or its cell could not be found again (the table changed)');
+          const after = (await dhtCell(frame).innerText({ timeout: 5000 })).trim();
           if (!dhtMatches(after, item.dht)) {
             throw new Error(`The cell shows "${after}" after typing "${item.dht}" (was "${before}")`);
           }

@@ -36,7 +36,9 @@ export default defineConfig({
     channel: process.env.BROWSER_CHANNEL || undefined,
     viewport: null,
     launchOptions: { args: ['--start-maximized'] },
-    actionTimeout: 0,
+    // Nothing may wait forever: an action that cannot finish fails that operation instead of freezing the run.
+    actionTimeout: 30_000,
+    navigationTimeout: 120_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure'
