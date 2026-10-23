@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type FrameLocator, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -29,6 +29,22 @@ const groups = groupByRouting(rows);
 fs.mkdirSync(path.dirname(RESULTS_PATH), { recursive: true });
 // Lets the app tell "not reached" rows from processed ones if the run dies half way.
 fs.writeFileSync(path.join(path.dirname(RESULTS_PATH), 'expected-rows.txt'), String(rows.length));
+
+/** Clicks //button[.='OK'] if it appears within a few seconds, in the PLM frame or on the page. */
+async function clickOkIfPresent(page: Page, frame: FrameLocator): Promise<boolean> {
+  const deadline = Date.now() + 3000;
+  do {
+    for (const scope of [frame, page]) {
+      const button = scope.locator("//button[.='OK']").first();
+      if (await button.isVisible().catch(() => false)) {
+        await button.click();
+        return true;
+      }
+    }
+    await page.waitForTimeout(300);
+  } while (Date.now() < deadline);
+  return false;
+}
 
 function record(row: PlmRow, status: 'updated' | 'not-in-plm' | 'no-dht' | 'invalid' | 'failed', message: string) {
   fs.appendFileSync(RESULTS_PATH, JSON.stringify({
@@ -137,13 +153,18 @@ for (const [routing, items] of groups) {
           await page.keyboard.press('Enter');
           await page.waitForTimeout(1500);
 
+          // A confirmation may pop up after the value is entered: if an OK button shows, click it.
+          const okClicked = await clickOkIfPresent(page, frame);
+          if (okClicked) await actions.log(`Clicked OK for operation ${item.paddedOperation}`);
+          await page.waitForTimeout(1500);
+
           const after = (await cell.innerText()).trim();
           if (!dhtMatches(after, item.dht)) {
             throw new Error(`The cell shows "${after}" after typing "${item.dht}" (was "${before}")`);
           }
           await actions.screenshot(`Routing_${routing}_Op_${item.paddedOperation}_DHT`);
           pending.delete(item);
-          record(item, 'updated', `${before} -> ${after} (not integrated)`);
+          record(item, 'updated', `${before} -> ${after}${okClicked ? ', OK clicked' : ''} (not integrated)`);
         } catch (error) {
           pending.delete(item);
           await actions.screenshot(`Routing_${routing}_Op_${item.paddedOperation}_Failed`);
