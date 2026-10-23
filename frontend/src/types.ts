@@ -10,7 +10,7 @@ export type ParsedWorkbook = {
 
 export type LogEvent = { type: 'status' | 'log' | 'error' | 'result'; step?: string; message?: string; timestamp?: string };
 
-export type RowStatus = 'updated' | 'not-in-plm' | 'invalid' | 'failed';
+export type RowStatus = 'updated' | 'not-in-plm' | 'no-dht' | 'invalid' | 'failed';
 
 export type RowResult = {
   row: number;

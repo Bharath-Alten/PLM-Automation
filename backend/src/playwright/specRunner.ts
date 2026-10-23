@@ -48,14 +48,16 @@ export function summarizeResults(results: RowResult[], expectedRows: number, spe
   const count = (status: RowResult['status']) => results.filter((r) => r.status === status).length;
   const updated = count('updated');
   const notInPlm = count('not-in-plm');
+  const noDht = count('no-dht');
   const invalid = count('invalid');
   const failed = count('failed');
   const unprocessed = Math.max(0, expectedRows - results.length);
   const problems = failed + invalid + unprocessed;
 
-  const businessStatus = expectedRows > 0 && updated === 0 ? 'failed' : problems > 0 || notInPlm > 0 ? 'partial-success' : 'success';
+  const businessStatus = expectedRows > 0 && updated === 0 ? 'failed' : problems > 0 || notInPlm > 0 || noDht > 0 ? 'partial-success' : 'success';
   const detail = [
     notInPlm ? `${notInPlm} operation(s) not in PLM` : '',
+    noDht ? `${noDht} operation(s) without a DHT item` : '',
     invalid ? `${invalid} invalid row(s)` : '',
     failed ? `${failed} failed` : '',
     unprocessed ? `${unprocessed} not reached` : ''
@@ -70,7 +72,7 @@ export function summarizeResults(results: RowResult[], expectedRows: number, spe
   return {
     success: businessStatus !== 'failed',
     message,
-    summary: { businessStatus, rowsUpdated: updated, rowsNotInPlm: notInPlm, rowsInvalid: invalid, rowsFailed: failed, rowsNotReached: unprocessed, rowsExpected: expectedRows }
+    summary: { businessStatus, rowsUpdated: updated, rowsNotInPlm: notInPlm, rowsNoDht: noDht, rowsInvalid: invalid, rowsFailed: failed, rowsNotReached: unprocessed, rowsExpected: expectedRows }
   };
 }
 

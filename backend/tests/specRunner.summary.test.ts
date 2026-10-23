@@ -18,6 +18,13 @@ test('operations missing in PLM make a partial success', () => {
   assert.equal(s.success, true);
 });
 
+test('an operation without a DHT item is a skip, not a failure', () => {
+  const s = summarizeResults([result('updated'), result('no-dht', 2)], 2, 'spec');
+  assert.equal(s.summary.businessStatus, 'partial-success');
+  assert.equal(s.summary.rowsNoDht, 1);
+  assert.match(s.message, /without a DHT item/);
+});
+
 test('nothing updated is a failure, and rows never reached are counted', () => {
   const s = summarizeResults([result('failed')], 3, 'spec');
   assert.equal(s.summary.businessStatus, 'failed');

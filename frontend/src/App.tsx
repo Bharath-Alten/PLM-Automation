@@ -135,7 +135,7 @@ export default function App() {
   // ---- derived ------------------------------------------------------------------------------
   const resultBySheetRow = useMemo(() => new Map((job?.rows ?? []).map((r) => [r.row, r])), [job?.rows]);
   const tally = useMemo(() => {
-    const t = { updated: 0, 'not-in-plm': 0, invalid: 0, failed: 0 };
+    const t = { updated: 0, 'not-in-plm': 0, 'no-dht': 0, invalid: 0, failed: 0 };
     job?.rows?.forEach((r) => (t[r.status] += 1));
     return t;
   }, [job?.rows]);
@@ -395,6 +395,7 @@ export default function App() {
                 <div className="stats stats-tight">
                   <Stat label="DHT entered" value={tally.updated} tone="good" />
                   <Stat label="Not in PLM" value={tally['not-in-plm']} tone={tally['not-in-plm'] ? 'warn' : 'neutral'} hint="Skipped, as agreed" />
+                  <Stat label="No DHT item" value={tally['no-dht']} tone={tally['no-dht'] ? 'warn' : 'neutral'} hint="Skipped, as agreed" />
                   <Stat label="Invalid rows" value={tally.invalid} tone={tally.invalid ? 'warn' : 'neutral'} />
                   <Stat label="Failed" value={tally.failed} tone={tally.failed ? 'bad' : 'neutral'} />
                 </div>

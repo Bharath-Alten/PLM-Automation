@@ -21,7 +21,7 @@ export type AutomationProgressEvent = {
 };
 
 // One line of results.jsonl: what happened to one workbook row.
-export type RowStatus = 'updated' | 'not-in-plm' | 'invalid' | 'failed';
+export type RowStatus = 'updated' | 'not-in-plm' | 'no-dht' | 'invalid' | 'failed';
 
 export type RowResult = {
   row: number;

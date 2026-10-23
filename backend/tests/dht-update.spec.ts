@@ -5,10 +5,11 @@ import * as path from 'path';
 import { Actions } from './webactions';
 import { groupByRouting, loadPlmRows, type PlmRow } from './plmData';
 import { pickLatestVersion, sameValue } from './operations';
-import { PLM_URL, dhtInput, operationCell, planFrame, planGrid, resultLinks, searchBox, searchButton, structureTab } from './selectors';
+import { PLM_URL, dhtItem, operationCell, planFrame, planGrid, resolveDhtInput, resultLinks, searchBox, searchButton, structureTab, tagDhtItem } from './selectors';
 
 // For each routing in the file: open its latest version in PLM, and for each operation of the file
-// that exists in the structure, put the value of column E into the DHT field.
+// that exists in the structure (//span[@qtip="0020"]), find its DHT item (//span[@qtip="1.35 DHT"])
+// and put the value of column E into it. No operation, or no DHT item: skip and carry on.
 //
 // THE RUN STOPS BEFORE "INTEGRATE". Nothing is checked in or integrated until the clarification
 // meeting with Airbus Atlantic has cleared it; the field is filled and verified, then the next
@@ -24,7 +25,7 @@ fs.mkdirSync(path.dirname(RESULTS_PATH), { recursive: true });
 // Lets the app tell "not reached" rows from processed ones if the run dies half way.
 fs.writeFileSync(path.join(path.dirname(RESULTS_PATH), 'expected-rows.txt'), String(rows.length));
 
-function record(row: PlmRow, status: 'updated' | 'not-in-plm' | 'invalid' | 'failed', message: string) {
+function record(row: PlmRow, status: 'updated' | 'not-in-plm' | 'no-dht' | 'invalid' | 'failed', message: string) {
   fs.appendFileSync(RESULTS_PATH, JSON.stringify({
     row: row.row, routing: row.routing, operation: row.operation, dht: row.dht, status, message
   }) + '\n');
@@ -101,7 +102,16 @@ for (const [routing, items] of groups) {
           await cell.click();
           await page.waitForTimeout(3000);
 
-          const input = dhtInput(frame);
+          // The operation's DHT item (//span[@qtip="<value> DHT"]); no such item: skip the operation.
+          if (!(await tagDhtItem(cell))) {
+            pending.delete(item);
+            record(item, 'no-dht', `Operation ${item.paddedOperation} has no DHT item; skipped`);
+            continue;
+          }
+          await dhtItem(frame).click();
+          await page.waitForTimeout(3000);
+
+          const input = await resolveDhtInput(frame);
           await expect(input, `DHT field for operation ${item.paddedOperation}`).toBeVisible({ timeout: 15_000 });
           if (!(await input.isEditable())) {
             throw new Error('DHT field is read-only (the plan may need to be checked out)');

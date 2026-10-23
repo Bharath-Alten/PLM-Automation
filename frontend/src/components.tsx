@@ -50,6 +50,7 @@ export function Stat({ label, value, tone = 'neutral', hint }: { label: string; 
 export const STATUS_TEXT: Record<RowStatus, string> = {
   updated: 'DHT entered',
   'not-in-plm': 'Not in PLM',
+  'no-dht': 'No DHT item',
   invalid: 'Invalid row',
   failed: 'Failed'
 };
