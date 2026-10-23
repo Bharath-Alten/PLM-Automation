@@ -13,8 +13,9 @@ streams its output back.
    - operation missing in the table: skipped, reported as "Not in PLM";
    - extra operation in PLM that is not in the file: ignored.
 4. In that row, put the value of **column E** of the file into the **"Temps Traite..."** cell (it reads like
-   `1.35 DHT`), and check it took. The other DHT columns (Temps Prépa, TRS) are never touched. A cell that
-   already shows the right value is left alone. No such cell on the row: skipped, reported as "No DHT item".
+   `1.35 DHT`), and check it took. The value is typed even if the cell already holds one (it is overwritten).
+   The other DHT columns (Temps Prépa, TRS) are never touched. No such cell on the row: skipped, reported
+   as "No DHT item".
 5. **Stop. Integrate is never clicked.** Wait for the Airbus Atlantic clarification.
    (Final step, once cleared: click Integrate and write the note "projet clocking".)
 

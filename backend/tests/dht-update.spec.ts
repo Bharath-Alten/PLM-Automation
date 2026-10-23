@@ -13,7 +13,8 @@ import {
 // For each routing in the file: open its latest version in PLM, go to Structure > Uses, and for each
 // operation of the file find its row by label number (//span[@qtip="0020"]); in that row, put the
 // value of column E into the "Temps Traite..." cell (it reads like "1.35 DHT").
-// Operation not in the table, or no such cell: skip and carry on.
+// The value is typed even if the cell already holds one (it is overwritten).
+// Operation of the file that is not in the table, or no such cell: skip and carry on.
 //
 // THE RUN STOPS BEFORE "INTEGRATE". Nothing is checked in or integrated until the clarification
 // meeting with Airbus Atlantic has cleared it; the cell is filled and verified, then the next
@@ -116,14 +117,7 @@ for (const [routing, items] of groups) {
           const cell = dhtCell(frame);
           const before = (await cell.innerText()).trim();
 
-          // Already the right value (the cell reads e.g. "1.35 DHT"): nothing to type.
-          if (dhtMatches(before, item.dht)) {
-            await actions.screenshot(`Routing_${routing}_Op_${item.paddedOperation}_DHT`);
-            pending.delete(item);
-            record(item, 'updated', `Already ${before} (not integrated)`);
-            continue;
-          }
-
+          // The value is typed whatever the cell holds now (it is overwritten).
           // Open the editor: one click, else a double click (depends on how the grid is set up).
           await cell.click();
           await page.waitForTimeout(800);
