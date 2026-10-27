@@ -19,6 +19,8 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   timeout: 900_000,
   retries: 0,
+  // A routing that fails never stops the others.
+  maxFailures: 0,
   // One test per routing, so routings can run side by side. WORKERS=1 if PLM struggles.
   fullyParallel: true,
   workers: Number(process.env.WORKERS || 4),

@@ -27,7 +27,7 @@ export type JobStatus = {
   logs: LogEvent[];
   rows?: RowResult[];
   progress?: { done: number; total: number };
-  options?: { maxRows: number; workers: number };
+  options?: { maxRoutings: number; workers: number };
   result?: { success: boolean; message: string; summary: Record<string, unknown> };
   artifacts?: Record<string, string>;
   startedAt?: string;

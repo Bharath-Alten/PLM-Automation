@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { Icons, Stat, Stepper, StatusBadge } from './components';
+import { Icons, Stepper, StatusBadge } from './components';
 import { buildPlan, isPlanSheet, type PlanRow } from './plan';
 import type { JobStatus, ParsedWorkbook, RowResult } from './types';
 
@@ -24,7 +24,7 @@ export default function App() {
   const [groupsShown, setGroupsShown] = useState(GROUPS_PER_PAGE);
 
   const [scope, setScope] = useState<'test' | 'all'>('test');
-  const [testRows, setTestRows] = useState(3);
+  const [testRoutings, setTestRoutings] = useState(2);
   const [workers, setWorkers] = useState(2);
 
   const [starting, setStarting] = useState(false);
@@ -37,7 +37,9 @@ export default function App() {
   const rows = data?.sheets[sheet] ?? [];
   const plan = useMemo(() => buildPlan(rows), [rows]);
   const running = job?.status === 'queued' || job?.status === 'running';
-  const scopeCount = scope === 'test' ? Math.min(testRows, plan.rows.length) : plan.rows.length;
+  // A run is made of whole routings: all the operations of each routing it takes.
+  const routingOrder = useMemo(() => new Map([...new Set(plan.rows.map((r) => r.routing))].map((name, i) => [name, i])), [plan.rows]);
+  const scopeCount = scope === 'test' ? plan.rows.filter((r) => (routingOrder.get(r.routing) ?? 0) < testRoutings).length : plan.rows.length;
 
   // ---- import -------------------------------------------------------------------------------
   async function importFile(file: File) {
@@ -89,7 +91,7 @@ export default function App() {
         body: JSON.stringify({
           fileName: data.fileName,
           parsedData: { ...data, sheetNames },
-          maxRows: scope === 'test' ? testRows : 0,
+          maxRoutings: scope === 'test' ? testRoutings : 0,
           workers
         })
       });
@@ -140,8 +142,6 @@ export default function App() {
     return t;
   }, [job?.rows]);
 
-  const positionBySheetRow = useMemo(() => new Map(plan.rows.map((r, i) => [r.sheetRow, i])), [plan.rows]);
-
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return plan.rows.filter((r) => {
@@ -156,8 +156,8 @@ export default function App() {
     return [...map.entries()];
   }, [visible]);
 
-  // Rows beyond this many are left out of the run (0 = none left out): what the last run used, else what is selected.
-  const shownLimit = job ? job.options?.maxRows ?? 0 : scope === 'test' ? testRows : 0;
+  // Routings beyond this many are left out of the run (0 = none left out): what the last run used, else what is selected.
+  const shownLimit = job ? job.options?.maxRoutings ?? 0 : scope === 'test' ? testRoutings : 0;
   const step = !data ? 1 : job ? (running ? 3 : 4) : 2;
   const total = job?.progress?.total || scopeCount;
   const done = job?.progress?.done ?? 0;
@@ -195,6 +195,17 @@ export default function App() {
         <span className={`pill pill-${outcome}`} role="status" aria-live="polite">
           <span className="pill-dot" />{OUTCOME_TEXT[outcome]}
         </span>
+        {job && (
+          <div className="top-progress">
+            <div className="top-progress-text">
+              <span>{done} of {total || '…'} operations · {percent}%</span>
+              <span className="mono">{formatElapsed(elapsed)}</span>
+            </div>
+            <div className="bar" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+              <div className={`bar-fill ${running ? 'is-active' : ''}`} style={{ width: `${percent}%` }} />
+            </div>
+          </div>
+        )}
       </header>
 
       <main className="container">
@@ -251,13 +262,6 @@ export default function App() {
 
         {data && !plan.error && (
           <>
-            <div className="stats">
-              <Stat label="Operations ready" value={plan.ready} tone="good" />
-              <Stat label="Routings" value={plan.routings} />
-              <Stat label="Need attention" value={plan.problems} tone={plan.problems ? 'warn' : 'neutral'} hint={plan.problems ? 'Skipped at run time' : undefined} />
-              <Stat label="DHT value from" value="Column E" hint={plan.keys.dht} />
-            </div>
-
             <div className="layout">
               {/* 2. Review ---------------------------------------------------------------- */}
               <section className="card review">
@@ -296,7 +300,7 @@ export default function App() {
                           <GroupRows key={routing} routing={routing} count={items.length} finished={job ? finished : undefined}>
                             {items.map((r) => {
                               const result = resultBySheetRow.get(r.sheetRow);
-                              const outOfScope = shownLimit > 0 && (positionBySheetRow.get(r.sheetRow) ?? 0) >= shownLimit && !result;
+                              const outOfScope = shownLimit > 0 && (routingOrder.get(r.routing) ?? 0) >= shownLimit && !result;
                               return (
                                 <tr key={r.sheetRow} className={`${r.problem ? 'row-problem' : ''} ${outOfScope ? 'row-dim' : ''}`}>
                                   <td className="num muted">{r.sheetRow}</td>
@@ -340,8 +344,8 @@ export default function App() {
                     <span>
                       <strong>Test run</strong>
                       <span className="muted">The first
-                        <input className="inline-number" type="number" min={1} max={Math.max(1, plan.rows.length)} value={testRows}
-                          onChange={(e) => setTestRows(Math.max(1, Math.floor(Number(e.target.value) || 1)))} /> operations
+                        <input className="inline-number" type="number" min={1} max={Math.max(1, plan.routings)} value={testRoutings}
+                          onChange={(e) => setTestRoutings(Math.max(1, Math.floor(Number(e.target.value) || 1)))} /> routings · {scopeCount} operations
                       </span>
                     </span>
                   </label>
@@ -372,13 +376,6 @@ export default function App() {
 
                 {job && (
                   <div className="progress-block">
-                    <div className="progress-head">
-                      <span>{done} of {total || '…'} operations</span>
-                      <span className="mono muted">{formatElapsed(elapsed)}</span>
-                    </div>
-                    <div className="bar" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
-                      <div className={`bar-fill ${running ? 'is-active' : ''}`} style={{ width: `${percent}%` }} />
-                    </div>
                     {job.result && <p className={`outcome outcome-${outcome}`}>{job.result.message}</p>}
                     {job.artifacts?.report && (
                       <a className="btn btn-ghost" href={job.artifacts.report}>{Icons.download} Download report</a>
@@ -392,13 +389,9 @@ export default function App() {
             {job && (job.rows?.length ?? 0) > 0 && (
               <section className="card">
                 <h2>Results</h2>
-                <div className="stats stats-tight">
-                  <Stat label="DHT entered" value={tally.updated} tone="good" />
-                  <Stat label="Not in PLM" value={tally['not-in-plm']} tone={tally['not-in-plm'] ? 'warn' : 'neutral'} hint="Skipped, as agreed" />
-                  <Stat label="No DHT item" value={tally['no-dht']} tone={tally['no-dht'] ? 'warn' : 'neutral'} hint="Skipped, as agreed" />
-                  <Stat label="Invalid rows" value={tally.invalid} tone={tally.invalid ? 'warn' : 'neutral'} />
-                  <Stat label="Failed" value={tally.failed} tone={tally.failed ? 'bad' : 'neutral'} />
-                </div>
+                <p className="muted results-line">
+                  {tally.updated} entered · {tally['not-in-plm']} not in PLM · {tally['no-dht']} without cell · {tally.invalid} invalid · {tally.failed} failed
+                </p>
                 {issues.length > 0 && (
                   <div className="table-wrap issues">
                     <table>

@@ -65,10 +65,13 @@ button, input, select { font: inherit; color: inherit; }
 /* ---- top bar -------------------------------------------------------------------------- */
 .topbar {
   position: sticky; top: 0; z-index: 10;
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px;
   padding: 12px max(16px, calc((100vw - 1240px) / 2));
   background: var(--surface); border-bottom: 1px solid var(--line);
 }
+.top-progress { flex-basis: 100%; display: grid; gap: 6px; }
+.top-progress-text { display: flex; justify-content: space-between; font-size: 0.84rem; color: var(--muted); }
+.results-line { margin-bottom: 12px; }
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
 .brand p { color: var(--muted); font-size: 0.84rem; }

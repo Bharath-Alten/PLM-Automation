@@ -83,7 +83,7 @@ export function readExpectedRows(artifactDir: string): number {
 }
 
 export type RunOptions = {
-  maxRows?: number;     // 0 = every row; overrides MAX_ROWS from backend/.env
+  maxRoutings?: number; // 0 = every routing; overrides MAX_ROUTINGS from backend/.env
   workers?: number;     // routings processed side by side; overrides WORKERS from backend/.env
   signal?: AbortSignal; // aborting stops the run
 };
@@ -114,7 +114,7 @@ export async function runPlaywrightSpec(
     ARTIFACT_DIR: artifactDir,
     FORCE_COLOR: '0'
   };
-  if (options.maxRows !== undefined) specEnv.MAX_ROWS = String(options.maxRows);
+  if (options.maxRoutings !== undefined) specEnv.MAX_ROUTINGS = String(options.maxRoutings);
   if (options.workers !== undefined) specEnv.WORKERS = String(options.workers);
 
   emit({ type: 'status', step: 'Sign-in', message: 'Sign in to PLM in the browser window when it opens.' });

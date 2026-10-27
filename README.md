@@ -56,7 +56,7 @@ that has a routing and an operation column; force one with `SHEET_NAME`. Develop
 
 `ROUTING_COLUMN`, `OP_COLUMN` and `DHT_COLUMN` take a column letter or a header name (set them in `backend/.env`).
 `WORKERS` (default 4) sets how many routings run side by side.
-`MAX_ROWS=3` limits a run to the first rows, to try it out.
+`MAX_ROUTINGS=3` limits a run to the first routings (with all their operations), to try it out.
 
 ## Layout
 

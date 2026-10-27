@@ -128,9 +128,12 @@ export function loadPlmRows(): PlmRow[] {
     }
     rows = sheets[pickSheet(sheets, wb.SheetNames)];
   }
-  const limit = Number(process.env.MAX_ROWS || 0);
+  // A run is made of whole routings: the limit counts routings, and every operation of a kept routing stays.
+  const limit = Number(process.env.MAX_ROUTINGS || 0);
   const all = toPlmRows(rows);
-  return limit > 0 ? all.slice(0, limit) : all;
+  if (limit <= 0) return all;
+  const kept = new Set([...new Set(all.map((row) => row.routing))].slice(0, limit));
+  return all.filter((row) => kept.has(row.routing));
 }
 
 /** Rows grouped by routing, keeping file order, so each routing is opened once. */
