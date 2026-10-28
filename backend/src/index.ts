@@ -104,7 +104,7 @@ app.post('/api/upload', (req, res) => {
 });
 
 app.post('/api/automation/run', (req, res) => {
-  const payload = req.body as { fileName?: string; parsedData?: ParsedWorkbook; maxRoutings?: unknown; workers?: unknown };
+  const payload = req.body as { fileName?: string; parsedData?: ParsedWorkbook; maxRoutings?: unknown; workers?: unknown; onlyRows?: unknown };
   if (!payload.parsedData?.sheetNames?.length) {
     return res.status(400).json({ error: 'No workbook data. Import a file first.' });
   }
@@ -112,6 +112,11 @@ app.post('/api/automation/run', (req, res) => {
   // 0 = every row. Whole numbers only, so nothing odd reaches the spec's environment.
   const maxRoutings = Number.isInteger(payload.maxRoutings) && (payload.maxRoutings as number) >= 0 ? (payload.maxRoutings as number) : 0;
   const workers = Number.isInteger(payload.workers) && (payload.workers as number) >= 1 && (payload.workers as number) <= 8 ? (payload.workers as number) : 1;
+
+  // A re-run lists the worksheet rows to process; anything that is not a whole row number is dropped.
+  const onlyRows = Array.isArray(payload.onlyRows)
+    ? payload.onlyRows.filter((n): n is number => Number.isInteger(n) && n > 0)
+    : [];
 
   if ([...jobs.values()].some((job) => job.status === 'queued' || job.status === 'running')) {
     return res.status(409).json({ error: 'A run is already in progress. PLM allows one run at a time.' });
@@ -143,7 +148,7 @@ app.post('/api/automation/run', (req, res) => {
 
     try {
       const result = await runPlaywrightSpec(data, jobArtifactDir, (event) => job.logs.push(event), {
-        maxRoutings, workers, signal: job.abort?.signal
+        maxRoutings, workers, onlyRows, signal: job.abort?.signal
       });
       if (job.stopped) {
         result.success = false;

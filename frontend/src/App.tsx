@@ -29,6 +29,9 @@ export default function App() {
 
   const [starting, setStarting] = useState(false);
   const [job, setJob] = useState<JobStatus | null>(null);
+  // A re-run only does some rows: what earlier runs recorded stays on screen, and the scope of the first run is remembered.
+  const [carried, setCarried] = useState<RowResult[]>([]);
+  const [baseLimit, setBaseLimit] = useState(0);
   const [now, setNow] = useState(Date.now());
   const [logFilter, setLogFilter] = useState<'all' | 'errors'>('all');
   const [copied, setCopied] = useState(false);
@@ -45,6 +48,7 @@ export default function App() {
   async function importFile(file: File) {
     setError('');
     setJob(null);
+    setCarried([]);
     setImporting(true);
     try {
       const body = new FormData();
@@ -77,9 +81,9 @@ export default function App() {
   }
 
   // ---- run ----------------------------------------------------------------------------------
-  async function run() {
+  async function run(only?: number[]) {
     if (!data || starting || running) return;
-    if (scope === 'all' && !window.confirm(`Run all ${plan.rows.length} operations on ${plan.routings} routings in PLM?`)) return;
+    if (!only && scope === 'all' && !window.confirm(`Run all ${plan.rows.length} operations on ${plan.routings} routings in PLM?`)) return;
     setError('');
     setStarting(true);
     try {
@@ -91,12 +95,19 @@ export default function App() {
         body: JSON.stringify({
           fileName: data.fileName,
           parsedData: { ...data, sheetNames },
-          maxRoutings: scope === 'test' ? testRoutings : 0,
+          maxRoutings: only ? 0 : scope === 'test' ? testRoutings : 0,
+          onlyRows: only ?? [],
           workers
         })
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.error ?? 'The run could not be started.');
+      if (only) {
+        setCarried(allRows);
+      } else {
+        setCarried([]);
+        setBaseLimit(scope === 'test' ? testRoutings : 0);
+      }
       setJob({ jobId: json.jobId, status: 'queued', logs: [], startedAt: new Date().toISOString() });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'The run could not be started.');
@@ -135,12 +146,27 @@ export default function App() {
   }, [job?.logs.length, logFilter]);
 
   // ---- derived ------------------------------------------------------------------------------
-  const resultBySheetRow = useMemo(() => new Map((job?.rows ?? []).map((r) => [r.row, r])), [job?.rows]);
+  // Results of earlier runs, with the latest run's results on top for the rows it redid.
+  const allRows = useMemo(() => [...new Map([...carried, ...(job?.rows ?? [])].map((r) => [r.row, r])).values()], [carried, job?.rows]);
+  const resultBySheetRow = useMemo(() => new Map(allRows.map((r) => [r.row, r])), [allRows]);
   const tally = useMemo(() => {
     const t = { updated: 0, 'not-in-plm': 0, 'no-dht': 0, invalid: 0, failed: 0 };
-    job?.rows?.forEach((r) => (t[r.status] += 1));
+    allRows.forEach((r) => (t[r.status] += 1));
     return t;
-  }, [job?.rows]);
+  }, [allRows]);
+
+  // Rows a re-run would do: the ones that failed, and the ones the run never reached.
+  const rerunRows = useMemo(() => {
+    if (!job || running) return [];
+    return plan.rows
+      .filter((r) => {
+        if (r.problem) return false;
+        const result = resultBySheetRow.get(r.sheetRow);
+        if (result) return result.status === 'failed';
+        return baseLimit === 0 || (routingOrder.get(r.routing) ?? 0) < baseLimit;
+      })
+      .map((r) => r.sheetRow);
+  }, [job, running, plan.rows, resultBySheetRow, baseLimit, routingOrder]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -157,7 +183,7 @@ export default function App() {
   }, [visible]);
 
   // Routings beyond this many are left out of the run (0 = none left out): what the last run used, else what is selected.
-  const shownLimit = job ? job.options?.maxRoutings ?? 0 : scope === 'test' ? testRoutings : 0;
+  const shownLimit = job ? baseLimit : scope === 'test' ? testRoutings : 0;
   const step = !data ? 1 : job ? (running ? 3 : 4) : 2;
   const total = job?.progress?.total || scopeCount;
   const done = job?.progress?.done ?? 0;
@@ -167,7 +193,7 @@ export default function App() {
   const outcome = running ? 'running' : !job ? 'idle' : stopped ? 'stopped' : job.result?.success ? (job.result.summary?.businessStatus === 'partial-success' ? 'partial' : 'success') : 'failed';
   const OUTCOME_TEXT: Record<string, string> = { idle: 'Ready', running: 'Running', stopped: 'Stopped', partial: 'Finished with skips', success: 'Finished', failed: 'Failed' };
 
-  const issues: RowResult[] = (job?.rows ?? []).filter((r) => r.status !== 'updated');
+  const issues: RowResult[] = allRows.filter((r) => r.status !== 'updated');
   const logLines = (job?.logs ?? []).filter((l) => logFilter === 'all' || l.type === 'error');
 
   async function copyLog() {
@@ -368,8 +394,14 @@ export default function App() {
                 {running ? (
                   <button className="btn btn-danger" onClick={stop}>{Icons.stop} Stop run</button>
                 ) : (
-                  <button className="btn btn-primary" onClick={run} disabled={starting || !plan.ready}>
+                  <button className="btn btn-primary" onClick={() => void run()} disabled={starting || !plan.ready}>
                     {Icons.play} {starting ? 'Starting…' : job ? 'Run again' : 'Run automation'}
+                  </button>
+                )}
+                {!running && rerunRows.length > 0 && (
+                  <button className="btn btn-ghost" onClick={() => void run(rerunRows)} disabled={starting}
+                    title="Only the rows that failed or were not reached; the rest is left as it is.">
+                    {Icons.play} Re-run failed rows only ({rerunRows.length})
                   </button>
                 )}
                 <p className="muted small">A browser window opens on PLM and signs in by itself. Leave it alone while it runs.</p>
@@ -386,7 +418,7 @@ export default function App() {
             </div>
 
             {/* 4. Results -------------------------------------------------------------------- */}
-            {job && (job.rows?.length ?? 0) > 0 && (
+            {job && allRows.length > 0 && (
               <section className="card">
                 <h2>Results</h2>
                 <p className="muted results-line">

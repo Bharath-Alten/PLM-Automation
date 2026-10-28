@@ -130,7 +130,9 @@ export function loadPlmRows(): PlmRow[] {
   }
   // A run is made of whole routings: the limit counts routings, and every operation of a kept routing stays.
   const limit = Number(process.env.MAX_ROUTINGS || 0);
-  const all = toPlmRows(rows);
+  // ONLY_ROWS = worksheet row numbers, comma separated: a re-run of the failed and not-reached rows.
+  const only = new Set((process.env.ONLY_ROWS || '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0));
+  const all = toPlmRows(rows).filter((row) => !only.size || only.has(row.row));
   if (limit <= 0) return all;
   const kept = new Set([...new Set(all.map((row) => row.routing))].slice(0, limit));
   return all.filter((row) => kept.has(row.routing));

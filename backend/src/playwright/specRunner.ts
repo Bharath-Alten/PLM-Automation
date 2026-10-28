@@ -85,6 +85,7 @@ export function readExpectedRows(artifactDir: string): number {
 export type RunOptions = {
   maxRoutings?: number; // 0 = every routing; overrides MAX_ROUTINGS from backend/.env
   workers?: number;     // routings processed side by side; overrides WORKERS from backend/.env
+  onlyRows?: number[];  // worksheet rows to process (a re-run); empty = all
   signal?: AbortSignal; // aborting stops the run
 };
 
@@ -116,6 +117,7 @@ export async function runPlaywrightSpec(
   };
   if (options.maxRoutings !== undefined) specEnv.MAX_ROUTINGS = String(options.maxRoutings);
   if (options.workers !== undefined) specEnv.WORKERS = String(options.workers);
+  specEnv.ONLY_ROWS = options.onlyRows?.length ? options.onlyRows.join(',') : '';
 
   emit({ type: 'status', step: 'Sign-in', message: 'Sign in to PLM in the browser window when it opens.' });
   emit({ type: 'status', step: 'Playwright test started', message: `Running ${SPEC_FILE}` });

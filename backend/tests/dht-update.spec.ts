@@ -146,11 +146,11 @@ for (const [routing, items] of groups) {
             }
           }
           const editor = dhtEditor(frame);
-          await editor.evaluate((el: HTMLInputElement, value: string) => {
-            el.value = value;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-          }, item.dht, { timeout: 5000 });
+          // Typed like a person would: focus the field, select what it holds, type over it. Setting the
+          // value by script left the grid with its old value on cells that already held a number.
+          await editor.focus({ timeout: 5000 });
+          await page.keyboard.press('Control+A');
+          await page.keyboard.type(item.dht, { delay: 40 });
           await page.keyboard.press('Enter');
           await page.waitForTimeout(1500);
 
