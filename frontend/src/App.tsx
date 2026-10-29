@@ -17,7 +17,7 @@ export default function App() {
   const [sheet, setSheet] = useState('');
   const [error, setError] = useState('');
   const [importing, setImporting] = useState(false);
-  const [dragging, setDragging] = useState(false);
+  const [sheetUrl, setSheetUrl] = useState('');
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'problems'>('all');
@@ -45,17 +45,22 @@ export default function App() {
   const scopeCount = scope === 'test' ? plan.rows.filter((r) => (routingOrder.get(r.routing) ?? 0) < testRoutings).length : plan.rows.length;
 
   // ---- import -------------------------------------------------------------------------------
-  async function importFile(file: File) {
+  // The default link comes from GOOGLE_SHEET_URL in backend/.env.
+  useEffect(() => {
+    fetch('/api/sheet/config').then((r) => r.json()).then((c: { url?: string }) => setSheetUrl((cur) => cur || c.url || '')).catch(() => undefined);
+  }, []);
+
+  async function importSheet() {
     setError('');
     setJob(null);
     setCarried([]);
     setImporting(true);
     try {
-      const body = new FormData();
-      body.append('file', file);
-      const response = await fetch('/api/upload', { method: 'POST', body });
+      const response = await fetch('/api/sheet/load', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: sheetUrl })
+      });
       const json = await response.json();
-      if (!response.ok) throw new Error(json.error ?? 'The file could not be read.');
+      if (!response.ok) throw new Error(json.error ?? 'The sheet could not be read.');
       const parsed = json as ParsedWorkbook;
       setData(parsed);
       // Start on the sheet that holds the plan data.
@@ -64,7 +69,7 @@ export default function App() {
       setFilter('all');
       setGroupsShown(GROUPS_PER_PAGE);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'The file could not be read.');
+      setError(e instanceof Error ? e.message : 'The sheet could not be read.');
     } finally {
       setImporting(false);
     }
@@ -246,22 +251,18 @@ export default function App() {
 
         {/* 1. Import ----------------------------------------------------------------------- */}
         {!data ? (
-          <label
-            className={`dropzone ${dragging ? 'is-dragging' : ''} ${importing ? 'is-busy' : ''}`}
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragging(false);
-              const file = e.dataTransfer.files[0];
-              if (file) void importFile(file);
-            }}
-          >
-            <input type="file" accept=".xlsx" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ''; }} />
-            <span className="dropzone-icon">{Icons.upload}</span>
-            <strong>{importing ? 'Reading the file…' : 'Drop your Excel file here'}</strong>
-            <span className="muted">or click to browse · .xlsx</span>
-          </label>
+          <section className="card file-card">
+            <span className="file-icon">{Icons.file}</span>
+            <div className="file-meta">
+              <strong>{importing ? 'Reading the Google Sheet…' : 'Google Sheet link'}</strong>
+              <input
+                style={{ width: '100%' }} placeholder="https://docs.google.com/spreadsheets/d/…" value={sheetUrl} disabled={importing}
+                onChange={(e) => setSheetUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void importSheet(); }}
+              />
+              <span className="muted">The sheet must be shared as "Anyone with the link can view".</span>
+            </div>
+            <button className="btn" disabled={importing || !sheetUrl.trim()} onClick={() => void importSheet()}>Load data</button>
+          </section>
         ) : (
           <section className="card file-card">
             <span className="file-icon">{Icons.file}</span>
@@ -277,10 +278,7 @@ export default function App() {
                 </select>
               </label>
             )}
-            <label className={`btn btn-ghost ${running ? 'is-disabled' : ''}`}>
-              Replace file
-              <input type="file" accept=".xlsx" hidden disabled={running} onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ''; }} />
-            </label>
+            <button className="btn btn-ghost" disabled={running || importing} onClick={() => void importSheet()}>Reload from Google Sheet</button>
           </section>
         )}
 

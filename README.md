@@ -82,3 +82,7 @@ These could not be tested without PLM access:
 - Whether the plan must be **checked out** to edit (the run reports "The cell did not become editable" if so).
 - Whether edits made on several operations survive until Integrate, since nothing is saved on purpose.
 - The latest-version choice reads versions like `A.3` from the result row text.
+
+## Google Sheet input (branch google-sheet-input)
+
+The data is read from a Google Sheet link instead of an uploaded .xlsx. Paste the link in the app (or set `GOOGLE_SHEET_URL` in `backend/.env` to pre-fill it) and click **Load data**. The sheet must be shared as "Anyone with the link can view". Links through the company proxy (`docs.google.com.rproxy.goskope.com`) are accepted. The rest of the flow is unchanged.

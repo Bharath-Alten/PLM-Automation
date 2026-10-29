@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx';
 
 import { config } from './config.js';
 import { parseWorkbook } from './excelParser.js';
+import { downloadSheet } from './sheetSource.js';
 import { readExpectedRows, readResults, runPlaywrightSpec } from './playwright/specRunner.js';
 import type { AutomationProgressEvent, ParsedWorkbook, RowResult } from './types.js';
 
@@ -101,6 +102,23 @@ app.post('/api/upload', (req, res) => {
       return res.status(400).json({ error: error instanceof Error ? error.message : 'Failed to parse uploaded file' });
     }
   });
+});
+
+// The default Google Sheet link (GOOGLE_SHEET_URL in backend/.env), to pre-fill the box in the UI.
+app.get('/api/sheet/config', (_req, res) => {
+  res.json({ url: process.env.GOOGLE_SHEET_URL || '' });
+});
+
+// Reads the input from a Google Sheet link: downloaded as .xlsx, then parsed like an uploaded file.
+app.post('/api/sheet/load', async (req, res) => {
+  const link = String((req.body as { url?: unknown })?.url || process.env.GOOGLE_SHEET_URL || '').trim();
+  if (!link) return res.status(400).json({ error: 'Paste the Google Sheet link first.' });
+  try {
+    const { filePath, fileName } = await downloadSheet(link, uploadDir);
+    return res.json(parseWorkbook(filePath, fileName));
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : 'The sheet could not be read.' });
+  }
 });
 
 app.post('/api/automation/run', (req, res) => {
