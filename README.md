@@ -86,3 +86,14 @@ These could not be tested without PLM access:
 ## Google Sheet input (branch google-sheet-input)
 
 The data is read from a Google Sheet link instead of an uploaded .xlsx. Paste the link in the app (or set `GOOGLE_SHEET_URL` in `backend/.env` to pre-fill it) and click **Load data**. If the sheet is shared as "Anyone with the link can view" it downloads directly; if it is private, a browser window opens and you sign in to Google there (the app never sees your credentials). Links through the company proxy (`docs.google.com.rproxy.goskope.com`) are accepted. The rest of the flow is unchanged.
+
+### Reading the sheet through clasp (no browser)
+
+When the company proxy blocks `docs.google.com` for the automation's browser, the data can be read through an Apps Script web app instead (same idea as KTS-Plan-Reader/gsheet). Once per machine:
+
+1. `npm install -g @google/clasp`, then turn on "Google Apps Script API" at https://script.google.com/home/usersettings.
+2. `clasp login` with the company Google account.
+3. In Google Drive, open the `.xlsx` and choose File > Save as Google Sheets (a script can only be attached to a native Google Sheet).
+4. `node gsheet/install.mjs <link of that Google Sheet>`, then open the printed address once and authorise the script.
+
+After that, **Load data** reads the workbook through the web app and the link box is not needed. `gsheet/config.json` (address + token), `gsheet/.clasp.json` and `gsheet/build/` stay on the machine and are not committed. Access is limited to company accounts and needs the token.

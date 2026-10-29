@@ -18,6 +18,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [importing, setImporting] = useState(false);
   const [sheetUrl, setSheetUrl] = useState('');
+  const [webApp, setWebApp] = useState(false); // gsheet/install.mjs was run on this machine: no link needed
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'problems'>('all');
@@ -47,7 +48,7 @@ export default function App() {
   // ---- import -------------------------------------------------------------------------------
   // The default link comes from GOOGLE_SHEET_URL in backend/.env.
   useEffect(() => {
-    fetch('/api/sheet/config').then((r) => r.json()).then((c: { url?: string }) => setSheetUrl((cur) => cur || c.url || '')).catch(() => undefined);
+    fetch('/api/sheet/config').then((r) => r.json()).then((c: { url?: string; webApp?: boolean }) => { setSheetUrl((cur) => cur || c.url || ''); setWebApp(Boolean(c.webApp)); }).catch(() => undefined);
   }, []);
 
   async function importSheet() {
@@ -259,9 +260,9 @@ export default function App() {
                 style={{ width: '100%' }} placeholder="https://docs.google.com/spreadsheets/d/…" value={sheetUrl} disabled={importing}
                 onChange={(e) => setSheetUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void importSheet(); }}
               />
-              <span className="muted">If the sheet is private, a browser window opens: sign in to Google there.</span>
+              <span className="muted">{webApp ? 'Read through the Apps Script web app (gsheet/install.mjs): the link is not needed.' : 'If the sheet is private, a browser window opens: sign in to Google there.'}</span>
             </div>
-            <button className="btn" disabled={importing || !sheetUrl.trim()} onClick={() => void importSheet()}>Load data</button>
+            <button className="btn" disabled={importing || (!webApp && !sheetUrl.trim())} onClick={() => void importSheet()}>Load data</button>
           </section>
         ) : (
           <section className="card file-card">

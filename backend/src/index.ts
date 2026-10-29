@@ -11,6 +11,7 @@ import * as XLSX from 'xlsx';
 import { config } from './config.js';
 import { parseWorkbook } from './excelParser.js';
 import { downloadSheet } from './sheetSource.js';
+import { readWorkbookViaWebApp, webAppConfig } from './sheetWebApp.js';
 import { readExpectedRows, readResults, runPlaywrightSpec } from './playwright/specRunner.js';
 import type { AutomationProgressEvent, ParsedWorkbook, RowResult } from './types.js';
 
@@ -106,11 +107,22 @@ app.post('/api/upload', (req, res) => {
 
 // The default Google Sheet link (GOOGLE_SHEET_URL in backend/.env), to pre-fill the box in the UI.
 app.get('/api/sheet/config', (_req, res) => {
-  res.json({ url: process.env.GOOGLE_SHEET_URL || '' });
+  res.json({ url: process.env.GOOGLE_SHEET_URL || '', webApp: Boolean(webAppConfig()) });
 });
 
-// Reads the input from a Google Sheet link: downloaded as .xlsx, then parsed like an uploaded file.
+// Reads the input from Google Sheets, then parses it like an uploaded file. Through the Apps Script web app
+// when gsheet/install.mjs has set it up on this machine (no browser, no docs.google.com page); otherwise
+// from the link: downloaded as .xlsx.
 app.post('/api/sheet/load', async (req, res) => {
+  const webApp = webAppConfig();
+  if (webApp) {
+    try {
+      const { filePath, fileName } = await readWorkbookViaWebApp(webApp, uploadDir);
+      return res.json(parseWorkbook(filePath, fileName));
+    } catch (error) {
+      return res.status(400).json({ error: error instanceof Error ? error.message : 'The sheet could not be read.' });
+    }
+  }
   const link = String((req.body as { url?: unknown })?.url || process.env.GOOGLE_SHEET_URL || '').trim();
   if (!link) return res.status(400).json({ error: 'Paste the Google Sheet link first.' });
   try {
