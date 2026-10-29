@@ -259,7 +259,7 @@ export default function App() {
                 style={{ width: '100%' }} placeholder="https://docs.google.com/spreadsheets/d/…" value={sheetUrl} disabled={importing}
                 onChange={(e) => setSheetUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void importSheet(); }}
               />
-              <span className="muted">The sheet must be shared as "Anyone with the link can view".</span>
+              <span className="muted">If the sheet is private, a browser window opens: sign in to Google there.</span>
             </div>
             <button className="btn" disabled={importing || !sheetUrl.trim()} onClick={() => void importSheet()}>Load data</button>
           </section>

@@ -85,4 +85,4 @@ These could not be tested without PLM access:
 
 ## Google Sheet input (branch google-sheet-input)
 
-The data is read from a Google Sheet link instead of an uploaded .xlsx. Paste the link in the app (or set `GOOGLE_SHEET_URL` in `backend/.env` to pre-fill it) and click **Load data**. The sheet must be shared as "Anyone with the link can view". Links through the company proxy (`docs.google.com.rproxy.goskope.com`) are accepted. The rest of the flow is unchanged.
+The data is read from a Google Sheet link instead of an uploaded .xlsx. Paste the link in the app (or set `GOOGLE_SHEET_URL` in `backend/.env` to pre-fill it) and click **Load data**. If the sheet is shared as "Anyone with the link can view" it downloads directly; if it is private, a browser window opens and you sign in to Google there (the app never sees your credentials). Links through the company proxy (`docs.google.com.rproxy.goskope.com`) are accepted. The rest of the flow is unchanged.
